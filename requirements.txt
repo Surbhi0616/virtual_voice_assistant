@@ -1,9 +1,9 @@
 streamlit
 groq
-chromadb
-pypdf
+langchain
 langchain-community
 langchain-chroma
+chromadb
+pyttsx3
 sentence-transformers
-protobuf==4.25.3
-grpcio==1.62.0
+pydub
