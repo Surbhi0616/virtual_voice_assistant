@@ -5,3 +5,5 @@ langchain-community
 faiss-cpu
 sentence-transformers
 streamlit-audiorecorder
+pydub
+SpeechRecognition
