@@ -1,91 +1,44 @@
 import streamlit as st
+import os
 from llm_generation import generate_voice_response
-from stt_listener import listen_to_microphone
-import pyttsx3
-import threading
+from rag_backend import initialize_knowledge_base, query_knowledge_base
+import speech_recognition as sr # Note: Keep this for local use, ignore in cloud
 
-# --- Helper function to run TTS in a background thread ---
-# This prevents the web browser from freezing while your computer speaks!
-def speak_text_async(text):
-    def tts_worker(text_to_speak):
-        try:
-            engine = pyttsx3.init()
-            engine.setProperty('rate', 175)
-            voices = engine.getProperty('voices')
-            if len(voices) > 1:
-                engine.setProperty('voice', voices[1].id)
-            engine.say(text_to_speak)
-            engine.runAndWait()
-        except Exception as e:
-            pass
+# Initialize the RAG system once
+@st.cache_resource
+def get_db():
+    return initialize_knowledge_base()
 
-    threading.Thread(target=tts_worker, args=(text,), daemon=True).start()
+st.title("🎙️ Virtual Voice Claims Assistant")
 
-# --- Streamlit Page Configurations ---
-st.set_page_config(page_title="Voice Claims Assistant", page_icon="🎙️", layout="centered")
+db = get_db()
+input_method = st.radio("Choose Input Method:", ("Text Input", "Upload Audio File"))
 
-st.title("Voice enabled intelligent virtual Assistant")
-st.markdown("Interact with your local vector database hands-free or via text query.")
-st.write("---")
+user_query = None
 
-# Initialize chat session memory for the UI display
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+if input_method == "Text Input":
+    user_query = st.text_input("Ask a question about the policy:")
+else:
+    audio_file = st.file_uploader("Upload audio file", type=["wav"])
+    if audio_file:
+        st.write("Transcribing...")
+        # Simple transcription logic using the uploaded file
+        recognizer = sr.Recognizer()
+        with sr.AudioFile(audio_file) as source:
+            audio_data = recognizer.record(source)
+            try:
+                user_query = recognizer.recognize_google(audio_data)
+                st.write(f"Transcribed: {user_query}")
+            except Exception as e:
+                st.error("Could not transcribe audio.")
 
-# --- Sidebar Controls ---
-with st.sidebar:
-    st.header("⚙️ System Control Center")
-    st.info("🤖 **LLM Brain:** `llama3.2:1b` \n\n📁 **Vector Store:** `nomic-embed-text`")
+if user_query:
+    st.write(f"Searching for: {user_query}")
+    # RAG Search
+    results = query_knowledge_base(user_query, db)
     
-    st.write("---")
-    if st.button("🗑️ Clear Chat History", use_container_width=True):
-        st.session_state.messages = []
-        st.rerun()
-
-# --- Top Interface: Voice Trigger Button ---
-st.subheader("Speak to Assistant")
-col1, col2 = st.columns([1, 4])
-
-with col1:
-    voice_clicked = st.button("🎤 Click & Talk", type="primary", use_container_width=True)
-
-# Handle Voice Input
-if voice_clicked:
-    with st.spinner("🎙️ Listening to microphone..."):
-        spoken_transcript = listen_to_microphone()
-        
-    if spoken_transcript:
-        # Append user text to chat interface
-        st.session_state.messages.append({"role": "user", "text": spoken_transcript})
-        
-        # Process through RAG chain
-        with st.spinner("🧠 Analyzing policy documents and thinking..."):
-            ai_reply = generate_voice_response(spoken_transcript)
-            
-        # Append AI text and trigger spoken output
-        st.session_state.messages.append({"role": "assistant", "text": ai_reply})
-        speak_text_async(ai_reply)
-        st.rerun()
-    else:
-        st.warning("Could not capture clear audio. Check microphone connection or try again.")
-
-# --- Bottom Interface: Visual Chat Stream ---
-st.subheader("💬 Chat Transcript")
-
-# Loop backwards or forwards to draw the messages on screen
-for message in st.session_state.messages:
-    if message["role"] == "user":
-        with st.chat_message("user", avatar="👤"):
-            st.write(message["text"])
-    else:
-        with st.chat_message("assistant", avatar="🤖"):
-            st.write(message["text"])
-
-# Fallback text entry box for hybrid input option
-if text_input := st.chat_input("Or type your policy question here..."):
-    st.session_state.messages.append({"role": "user", "text": text_input})
-    with st.spinner("🧠 Analyzing policy documents..."):
-        ai_reply = generate_voice_response(text_input)
-    st.session_state.messages.append({"role": "assistant", "text": ai_reply})
-    speak_text_async(ai_reply)
-    st.rerun()
+    # Generate Response
+    response = generate_voice_response(user_query, results)
+    
+    st.subheader("Response:")
+    st.write(response)

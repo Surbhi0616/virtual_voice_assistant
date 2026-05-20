@@ -2,8 +2,10 @@ streamlit
 groq
 langchain
 langchain-community
-langchain-community
-faiss-cpu
-sentence-transformers
+langchain-chroma
+chromadb
 pyttsx3
 pydub
+sentence-transformers
+torch
+SpeechRecognition
