@@ -6,5 +6,4 @@ langchain-chroma
 chromadb
 pyttsx3
 sentence-transformers
-torch
-torchvision
+pydub
